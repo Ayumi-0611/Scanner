@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>伝票スキャナー</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --blue:#007AFF; --green:#34C759; --red:#FF3B30; --orange:#FF9500;
+      --g1:#1C1C1E; --g2:#636366; --g3:#AEAEB2; --g4:#C7C7CC;
+      --g5:#D1D1D6; --g6:#F2F2F7; --white:#FFFFFF;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;background:var(--g6);color:var(--g1);min-height:100vh;max-width:430px;margin:0 auto}
+    .nav{position:sticky;top:0;z-index:100;padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 12px;background:rgba(242,242,247,0.93);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:0.5px solid rgba(0,0,0,0.1)}
+    .nav-title{font-size:17px;font-weight:600;flex:1;text-align:center}
+    .nav-btn{padding:6px 4px;font-size:17px;color:var(--blue);background:none;border:none;cursor:pointer;white-space:nowrap;min-width:60px}
+    .nav-btn.right{text-align:right}
+    .nav-btn.icon{width:34px;height:34px;padding:0;border-radius:50%;background:var(--white);box-shadow:0 1px 4px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;font-size:18px}
+    .screen{padding:16px 16px 100px}
+    .large-title{font-size:34px;font-weight:700;margin-bottom:6px}
+    .subtitle{font-size:15px;color:var(--g2);line-height:1.5;margin-bottom:24px}
+    .section{margin-bottom:20px}
+    .section-header{font-size:12px;font-weight:600;color:var(--g2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;padding:0 4px}
+    .card{background:var(--white);border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.07)}
+    .card-row{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:0.5px solid var(--g6)}
+    .card-row:last-child{border-bottom:none}
+    .card-row-label{font-size:15px;flex:1}
+    .card-row-value{font-size:15px;color:var(--g2);text-align:right;font-family:monospace}
+    .photo-area{width:100%;height:170px;background:var(--g6);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:2px dashed var(--g4);overflow:hidden;position:relative}
+    .photo-area.has-image{border:none}
+    .photo-area img{width:100%;height:100%;object-fit:cover}
+    .photo-area-icon{font-size:38px}
+    .photo-area-text{font-size:15px;color:var(--blue);font-weight:500}
+    .photo-retake{position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.62);color:white;border:none;border-radius:20px;padding:6px 12px;font-size:13px;cursor:pointer}
+    .field{margin-bottom:12px}
+    .field-label{font-size:13px;color:var(--g2);margin-bottom:5px;padding:0 4px}
+    .field-input{width:100%;padding:13px 16px;background:var(--white);border:1.5px solid var(--g5);border-radius:12px;font-size:17px;color:var(--g1);outline:none;-webkit-appearance:none}
+    .field-input:focus{border-color:var(--blue)}
+    .field-input.ok{border-color:var(--green);background:#F0FFF4}
+    .ocr-tag{font-size:11px;color:var(--green);font-weight:600;margin-left:6px}
+    .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:16px;border-radius:14px;border:none;font-size:17px;font-weight:600;cursor:pointer;margin-bottom:10px}
+    .btn:active{opacity:0.72}
+    .btn:last-child{margin-bottom:0}
+    .btn-primary{background:var(--blue);color:white}
+    .btn-secondary{background:var(--white);color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+    .btn-success{background:var(--green);color:white}
+    .btn-disabled{background:var(--g5);color:var(--g3);cursor:not-allowed;pointer-events:none}
+    .progress{display:flex;gap:6px;margin-bottom:20px}
+    .progress-dot{flex:1;height:4px;border-radius:2px;background:var(--g5)}
+    .progress-dot.done{background:var(--green)}
+    .progress-dot.active{background:var(--blue)}
+    .big-num{text-align:center;padding:28px 16px}
+    .big-num .num{font-size:80px;font-weight:700;color:var(--blue);line-height:1}
+    .big-num .unit{font-size:18px;color:var(--g2);margin-top:4px}
+    .p-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:0.5px solid var(--g6)}
+    .p-item:last-child{border-bottom:none}
+    .p-num{width:28px;height:28px;background:var(--g6);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--g2);flex-shrink:0}
+    .p-id{flex:1;font-family:'SF Mono',monospace;font-size:14px;word-break:break-all}
+    .p-del{color:var(--red);font-size:20px;border:none;background:none;cursor:pointer;padding:4px;flex-shrink:0}
+    .amount-hl{text-align:center;padding:24px;background:var(--white);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,0.07);margin-bottom:16px}
+    .amount-hl .lbl{font-size:13px;color:var(--g2);margin-bottom:4px}
+    .amount-hl .val{font-size:44px;font-weight:700;color:var(--green)}
+    .amount-hl .sub{font-size:13px;color:var(--g3);margin-top:4px}
+    .loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:900}
+    .loading-overlay.show{display:flex}
+    .loading-box{background:white;border-radius:20px;padding:32px 40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px;min-width:220px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spinner{width:36px;height:36px;border:3px solid var(--g5);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite}
+    .loading-text{font-size:15px;color:var(--g2)}
+    .progress-bar-wrap{width:100%;height:6px;background:var(--g5);border-radius:3px;overflow:hidden;margin-top:4px}
+    .progress-bar-fill{height:100%;background:var(--blue);border-radius:3px;transition:width 0.3s}
+    .toast{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 32px);left:50%;transform:translateX(-50%) translateY(16px);background:var(--g1);color:white;padding:12px 22px;border-radius:24px;font-size:15px;font-weight:500;z-index:2000;opacity:0;transition:all 0.25s;white-space:nowrap;pointer-events:none}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:800;display:flex;align-items:flex-end}
+    @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+    .modal-box{background:white;border-radius:22px 22px 0 0;width:100%;padding:24px 16px calc(env(safe-area-inset-bottom,0px) + 24px);animation:slideUp 0.28s ease}
+    .modal-title{font-size:18px;font-weight:700;margin-bottom:16px}
+    .modal-img{width:100%;height:130px;object-fit:cover;border-radius:12px;margin-bottom:16px}
+    .modal-input{width:100%;padding:14px 16px;border-radius:12px;border:2px solid var(--blue);font-size:18px;font-family:monospace;outline:none;-webkit-appearance:none;color:var(--g1);background:white;margin-bottom:6px}
+    .modal-input.detected{border-color:var(--green);background:#F0FFF4}
+    .modal-hint{font-size:12px;color:var(--g3);margin-bottom:16px}
+    .modal-btn-add{width:100%;padding:16px;background:var(--blue);color:white;border:none;border-radius:14px;font-size:17px;font-weight:600;cursor:pointer;margin-bottom:8px}
+    .modal-btn-cancel{width:100%;padding:12px;background:none;color:var(--red);border:none;font-size:17px;cursor:pointer}
+    details{background:var(--white);border-radius:14px;overflow:hidden}
+    summary{padding:14px 16px;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between}
+    summary::-webkit-details-marker{display:none}
+    summary::after{content:'›';font-size:22px;color:var(--g3);transition:transform 0.2s}
+    details[open] summary::after{transform:rotate(90deg)}
+    .details-body{padding:0 16px 16px}
+    pre{background:#1C1C1E;color:#E5E5EA;padding:14px;border-radius:12px;font-size:11px;overflow-x:auto;white-space:pre;line-height:1.6;margin-top:10px;font-family:'SF Mono','Courier New',monospace}
+    .success-circle{width:80px;height:80px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 20px}
+    .status-badge{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:12px;font-size:14px;font-weight:500;margin-bottom:12px;width:100%}
+    .status-ok{background:#E8F8ED;color:#1B5E20}
+    .status-warn{background:#FFF3E0;color:#BF360C}
+    .info-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:0.5px solid var(--g6);font-size:14px}
+    .info-row:last-child{border-bottom:none}
+    .info-label{color:var(--g2)}
+    .info-value{font-weight:600;font-family:monospace}
+  </style>
+</head>
+<body>
+
+<div id="qr-dummy" style="display:none"></div>
+<input type="file" id="cameraInput" accept="image/*" style="display:none">
+<div id="toast" class="toast"></div>
+<div id="loading" class="loading-overlay">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div id="loading-text" class="loading-text">処理中...</div>
+    <div class="progress-bar-wrap" id="loading-bar-wrap" style="display:none">
+      <div class="progress-bar-fill" id="loading-bar" style="width:0%"></div>
+    </div>
+  </div>
+</div>
+<div id="app"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+const S = {
+  screen: 'home',
+  batch: null,
+  camMode: null,
+  scanDetected: false,
+  pendingFile: null,   // File object from camera for current shot
+  settings: { gasUrl: '', sheetName: 'シート1' }
+};
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxpmI7ZM58P6cTCrerOveG2UM5llYazRgfYb-zTIiMmyXv8CWzUZknLQKbYSS37gX1nAg/exec';
+
+function loadSettings() {
+  S.settings.gasUrl = localStorage.getItem('gasUrl') || DEFAULT_GAS_URL;
+  S.settings.sheetName = localStorage.getItem('sheetName') || 'シート1';
+}
+function saveSettingsData() {
+  S.settings.gasUrl = (document.getElementById('gasUrlInput')?.value||'').trim();
+  localStorage.setItem('gasUrl', S.settings.gasUrl);
+  toast('設定を保存しました ✓'); go('home');
+}
+
+// ══════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════
+function go(screen) {
+  S.screen = screen;
+  document.getElementById('app').innerHTML = buildScreen(screen);
+  window.scrollTo({top:0,behavior:'instant'});
+}
+function buildScreen(s) {
+  switch(s){
+    case 'home':     return screenHome();
+    case 'settings': return screenSettings();
+    case 'products': return screenProducts();
+    case 'sagawa':   return screenSagawa();
+    case 'summary':  return screenSummary();
+    case 'success':  return screenSuccess();
+    default: return screenHome();
+  }
+}
+
+// ══════════════════════════════════════════════
+//  SCREENS
+// ══════════════════════════════════════════════
+function screenHome() {
+  const ok = !!S.settings.gasUrl;
+  return `
+  <div class="nav">
+    <div style="min-width:60px"></div>
+    <div class="nav-title">伝票スキャナー</div>
+    <button class="nav-btn icon right" onclick="go('settings')">⚙️</button>
+  </div>
+  <div class="screen">
+    <div class="large-title">伝票スキャナー</div>
+    <div class="subtitle">商品ラベルと佐川伝票を撮影して<br>Drive保存 ＋ スプシに自動記録</div>
+    <div class="status-badge ${ok?'status-ok':'status-warn'}">
+      ${ok ? '✅ スプレッドシート接続済み' : '⚠️ 設定から Apps Script URL を入力してください'}
+    </div>
+    <button class="btn btn-primary" onclick="startBatch()">📦 新しいバッチを開始</button>
+  </div>`;
+}
+
+function screenSettings() {
+  const gasCode = `// ════════════════════════════════════════════════
+// 伝票スキャナー — Google Apps Script
+// ════════════════════════════════════════════════
+// スプレッドシートID（URLの /d/XXXXX/edit の部分）
+var SHEET_ID    = '1EaXbCgIR42ggOCAGCHo9sSsfbwWlZ8wPij4Pq6PEZRY';
+var FOLDER_NAME = '伝票スキャナー画像';
+var HEADER_ROW  = 4;   // 「注文番号」などのヘッダーがある行
+var ORDER_COL   = 1;   // A列: 注文番号
+var TRACK_COL   = 6;   // F列: 佐川急便 追跡番号
+var RATE_COL    = 7;   // G列: 送料
+var DATE_COL    = 8;   // H列: 発送日
+// 検索対象シート（全マーケット）
+var SHEETS = ['SG発送履歴','MY発送履歴','PH発送履歴','TW発送履歴','VN発送履歴','TH発送履歴'];
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var res = data.action === 'uploadImage' ? uploadImage(data)
+            : data.action === 'saveBatch'   ? saveBatch(data)
+            : data.action === 'deleteFile'  ? deleteFile(data)
+            : { status:'error', msg:'unknown action' };
+    return ContentService
+      .createTextOutput(JSON.stringify(res))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ status:'error', msg:err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─── 画像をDriveに保存 → OCRで文字抽出 ──────
+function uploadImage(data) {
+  var folder = getOrCreateFolder(FOLDER_NAME);
+  var filename;
+  if (data.type === 'sagawa') {
+    var dateStr = data.date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d');
+    filename = '佐川　' + dateStr + '.jpg';
+  } else {
+    filename = 'product_tmp_' + new Date().getTime() + '.jpg';
+  }
+  var b64 = data.image.replace(/^data:image\\/[^;]+;base64,/, '');
+  var blob = Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', filename);
+  var file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var fileUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view';
+
+  var result = { status:'ok', fileUrl:fileUrl };
+  try {
+    var lang = (data.type === 'product') ? 'en' : 'ja';
+    var ocrText = runOcr(file, lang);
+    result.ocrText = ocrText || '(empty)';
+    if (data.type === 'sagawa') {
+      result.tracking = extractTracking(ocrText);
+      result.amount   = extractAmount(ocrText);
+    } else {
+      result.orderId = extractOrderId(ocrText);
+      if (result.orderId) {
+        file.setName(result.orderId + '.jpg');
+      }
+    }
+  } catch(e) { result.ocrError = e.toString(); }
+  return result;
+}
+
+// ─── Order IDで行を検索して書き込み ──────────
+var HAWB_COL = 2; // B列: HAWB番号
+
+function saveBatch(data) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var n = data.products.length;
+  var perItem = n > 0 ? Math.round(parseFloat(data.amount) / n) : 0;
+  var tracking = formatTracking(data.tracking);
+  var results = [];
+
+  data.products.forEach(function(p) {
+    var found = false;
+    for (var si = 0; si < SHEETS.length; si++) {
+      var sheet = ss.getSheetByName(SHEETS[si]);
+      if (!sheet) continue;
+
+      var imgCol = findOrCreateColumn(sheet, HEADER_ROW, '画像');
+      var lastRow = sheet.getLastRow();
+      if (lastRow < HEADER_ROW + 1) continue;
+
+      // A列とB列を同時取得
+      var colAB = sheet.getRange(1, ORDER_COL, lastRow, 2).getValues();
+
+      // マッチする行を全部収集
+      var matchedRows = [];
+      for (var ri = 0; ri < colAB.length; ri++) {
+        if (String(colAB[ri][0]).trim() === String(p.orderId).trim()) {
+          matchedRows.push({ rowNum: ri + 1, hawb: String(colAB[ri][1]).trim() });
+        }
+      }
+
+      if (matchedRows.length === 0) continue;
+
+      // 重複がある場合はHAWB番号が入っている行を優先、なければ最初の行
+      var targetRow = matchedRows[0];
+      if (matchedRows.length > 1) {
+        var withHawb = matchedRows.filter(function(r) { return r.hawb !== ''; });
+        if (withHawb.length > 0) targetRow = withHawb[0];
+      }
+
+      var rowNum = targetRow.rowNum;
+      sheet.getRange(rowNum, TRACK_COL).setValue(tracking);
+      sheet.getRange(rowNum, RATE_COL).setValue(perItem);
+      sheet.getRange(rowNum, DATE_COL).setValue(data.date);
+      if (p.imageUrl) {
+        sheet.getRange(rowNum, imgCol).setFormula(
+          '=HYPERLINK("' + p.imageUrl + '","📷 画像")'
+        );
+      }
+      found = true;
+      results.push({ orderId:p.orderId, sheet:SHEETS[si], row:rowNum, hawb:targetRow.hawb, status:'updated' });
+      break;
+    }
+    if (!found) results.push({ orderId:p.orderId, status:'not_found' });
+  });
+
+  return { status:'ok', count:n, perItem:perItem, results:results };
+}
+
+// ─── OCR ────────────────────────────────────
+function runOcr(file, lang) {
+  var resource = { title:'ocr_tmp_'+Date.now(), mimeType:'application/vnd.google-apps.document' };
+  var copy = Drive.Files.copy(resource, file.getId(), { ocr:true, ocrLanguage:lang });
+  var text = DocumentApp.openById(copy.id).getBody().getText();
+  Drive.Files.remove(copy.id);
+  return text;
+}
+
+// ─── テキスト抽出 ────────────────────────────
+function extractOrderId(text) {
+  // ① "Order ID:" or "Mã đơn hàng:" の後の値
+  var m = text.match(/[Oo]rder\s*[Ii][Dd][^A-Z0-9]*([A-Z0-9]{8,20})/);
+  if (m) return m[1];
+  m = text.match(/[Mm][aã][^:]*:[\\s]*([A-Z0-9]{10,20})/);
+  if (m) return m[1];
+  // ② 国コード（MY/SG/PH/TW/VN/TH）＋数字のパターン
+  m = text.match(/\\b((?:MY|SG|PH|TW|VN|TH)\\d{10,15})\\b/);
+  if (m) return m[1];
+  // ③ 数字6桁＋英数字6〜12桁のパターン
+  m = text.match(/\\b(\\d{6}[A-Z0-9]{6,12})\\b/);
+  return m ? m[1] : '';
+}
+function extractTracking(text) {
+  // 優先①: 「お問い合わせ状No」の近くにある番号
+  var m = text.match(/お問い合わせ[状]?[Nn][Oo]?[.．:：\s]*(\d[\d\-\s]{10,15}\d)/);
+  if (m) return m[1].replace(/[\-\s]/g,'');
+  // 優先②: XXXX-XXXX-XXXX 形式（12桁）
+  m = text.match(/\b(\d{4}[-\s]\d{4}[-\s]\d{4})\b/);
+  if (m) return m[1].replace(/[\-\s]/g,'');
+  // フォールバック: 12桁の数字
+  m = text.match(/\b(\d{12})\b/);
+  return m ? m[1] : '';
+}
+function extractAmount(text) {
+  var m = text.match(/[¥￥]?[\\s]*(\\d{1,3}(?:[,，]\\d{3})+)/);
+  return m ? m[1].replace(/[,，]/g,'') : '';
+}
+
+// ─── 追跡番号を XXXX-XXXX-XXXX 形式に ───────
+function updateSagawaBtn() {
+  const btn = document.getElementById('sagawaNextBtn');
+  if (!btn) return;
+  const ok = S.batch.tracking.length > 0 && S.batch.amount.length > 0;
+  btn.className = 'btn ' + (ok ? 'btn-primary' : 'btn-disabled');
+  btn.onclick = ok ? () => go('summary') : null;
+}
+
+function formatTracking(raw) {
+  var d = String(raw||'').replace(/\\D/g,'');
+  return d.length === 12
+    ? d.slice(0,4)+'-'+d.slice(4,8)+'-'+d.slice(8,12)
+    : (raw||'');
+}
+
+// ─── ヘッダー列を探すか追加する ──────────────
+function findOrCreateColumn(sheet, headerRow, name) {
+  var last = sheet.getLastColumn();
+  if (last > 0) {
+    var headers = sheet.getRange(headerRow, 1, 1, last).getValues()[0];
+    var idx = headers.indexOf(name);
+    if (idx >= 0) return idx + 1;
+  }
+  var newCol = last + 1;
+  sheet.getRange(headerRow, newCol).setValue(name).setFontWeight('bold');
+  return newCol;
+}
+
+// ─── Drive ファイル削除 ───────────────────────
+function deleteFile(data) {
+  try {
+    if (data.fileId) DriveApp.getFileById(data.fileId).setTrashed(true);
+    return { status:'ok' };
+  } catch(e) { return { status:'error', msg:e.toString() }; }
+}
+
+// ─── Drive フォルダ ──────────────────────────
+function getOrCreateFolder(name) {
+  var f = DriveApp.getFoldersByName(name);
+  return f.hasNext() ? f.next() : DriveApp.createFolder(name);
+}`;
+
+  return `
+  <div class="nav">
+    <button class="nav-btn" onclick="go('home')">‹ 戻る</button>
+    <div class="nav-title">設定</div>
+    <button class="nav-btn right" onclick="saveSettingsData()" style="font-weight:700">保存</button>
+  </div>
+  <div class="screen">
+    <div class="section">
+      <div class="section-header">Apps Script URL</div>
+      <div class="card" style="padding:16px">
+        <div class="field" style="margin:0">
+          <div class="field-label">Google Apps Script デプロイ URL</div>
+          <input class="field-input" id="gasUrlInput" type="url" inputmode="url"
+            placeholder="https://script.google.com/macros/s/..."
+            value="${esc(S.settings.gasUrl)}" autocomplete="off" autocorrect="off">
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="card" style="padding:12px 16px;background:#E8F8ED">
+        <div style="font-size:13px;color:#1B5E20;line-height:1.6">
+          ✅ スプシ ID・シート名は GAS コード内に設定済みです。<br>
+          検索対象：SG / MY / PH / TW / VN / TH 発送履歴（全自動）
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header">初期設定手順（初回のみ）</div>
+      <details>
+        <summary>Google Apps Script の設定方法</summary>
+        <div class="details-body">
+          <div style="font-size:14px;line-height:1.9;color:var(--g2);margin-bottom:8px">
+            1. スプレッドシートを開く<br>
+            2. メニュー「拡張機能」→「Apps Script」<br>
+            3. 下のコードを<strong>全部</strong>コピーして貼り付け<br>
+            4. 左メニュー「サービス」→「<strong>Drive API</strong>」を追加<br>
+            5. 「デプロイ」→「新しいデプロイ」<br>
+            6. 種類：「ウェブアプリ」／アクセス：「<strong>全員</strong>」<br>
+            7. デプロイ後の URL を上の欄に貼り付け
+          </div>
+          <div style="font-size:12px;color:var(--orange);background:#FFF3E0;padding:10px;border-radius:8px;margin-bottom:6px">
+            ⚠️ スプシ ID はコード1行目に記載済みです。<br>
+            別のスプシを使う場合は SHEET_ID を書き換えてください。
+          </div>
+          <button onclick="copyGasCode()" style="width:100%;padding:12px;margin-bottom:8px;background:var(--orange);color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">📋 GASコードをコピー</button>
+          <pre>${esc(gasCode)}</pre>
+        </div>
+      </details>
+    </div>
+  </div>`;
+}
+
+function screenProducts() {
+  const n = S.batch.products.length;
+  return `
+  <div class="nav">
+    <button class="nav-btn" onclick="go('home')">✕ キャンセル</button>
+    <div class="nav-title">① 商品スキャン</div>
+    <div style="min-width:60px"></div>
+  </div>
+  <div class="screen">
+    <div class="progress"><div class="progress-dot active"></div><div class="progress-dot"></div><div class="progress-dot"></div></div>
+    <div class="big-num">
+      <div class="num">${n}</div>
+      <div class="unit">個スキャン済み</div>
+    </div>
+    <div class="section">
+      <button class="btn btn-primary" onclick="triggerCam('product')">📷 商品ラベルを撮影</button>
+    </div>
+    ${n > 0 ? `
+    <div class="section">
+      <div class="section-header">スキャン済み Order ID</div>
+      <div class="card">
+        ${S.batch.products.map((p,i)=>`
+          <div class="p-item">
+            <div class="p-num">${i+1}</div>
+            <div class="p-id">${esc(p.orderId)}</div>
+            <button class="p-del" onclick="delProduct(${i})">✕</button>
+          </div>`).join('')}
+      </div>
+    </div>
+    <button class="btn btn-success" onclick="go('sagawa')">次へ → 佐川伝票スキャン (${n}個)</button>
+    ` : ''}
+  </div>`;
+}
+
+function screenSagawa() {
+  const hasImg = !!S.batch.sagawaPreview;
+  const canNext = true;
+  const n = S.batch.products.length;
+  return `
+  <div class="nav">
+    <button class="nav-btn" onclick="go('products')">‹ 戻る</button>
+    <div class="nav-title">② 佐川伝票</div>
+    <div style="min-width:60px"></div>
+  </div>
+  <div class="screen">
+    <div class="progress"><div class="progress-dot done"></div><div class="progress-dot active"></div><div class="progress-dot"></div></div>
+    <div class="section">
+      <div class="section-header">ダンボール箱の佐川伝票を撮影</div>
+      <div class="photo-area ${hasImg?'has-image':''}" onclick="triggerCam('sagawa')">
+        ${hasImg
+          ? `<img src="${S.batch.sagawaPreview}" alt="佐川伝票">
+             <button class="photo-retake" onclick="event.stopPropagation();triggerCam('sagawa')">📷 撮り直す</button>`
+          : `<div class="photo-area-icon">🚚</div>
+             <div class="photo-area-text">タップして撮影</div>`}
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header">伝票情報を確認・入力</div>
+      <div class="field">
+        <div class="field-label">追跡番号${S.scanDetected?'<span class="ocr-tag">✓ 自動検出</span>':''}</div>
+        <input class="field-input ${S.scanDetected?'ok':''}" id="trackingInput"
+          type="text" inputmode="numeric" placeholder="12桁の番号（例: 123456789012）"
+          value="${esc(S.batch.tracking)}" oninput="S.batch.tracking=this.value;updateSagawaBtn()" autocomplete="off">
+      </div>
+      <div class="field">
+        <div class="field-label">サイズ・送料${S.batch.amountDetected?'<span class="ocr-tag">✓ 自動検出</span>':''}</div>
+        ${S.batch.detectedSize ? `<div style="font-size:13px;color:#666;margin-bottom:6px">📦 ${S.batch.detectedSize}サイズ → ${S.batch.amount}円</div>` : ''}
+        <input class="field-input ${S.batch.amountDetected?'ok':''}" id="amountInput"
+          type="text" inputmode="numeric" placeholder="送料（例: 690）"
+          value="${esc(S.batch.amount)}" oninput="S.batch.amount=this.value;updateSagawaBtn()" autocomplete="off">
+      </div>
+      <div class="field">
+        <div class="field-label">発送日</div>
+        <input class="field-input" id="dateInput" type="date"
+          value="${esc(S.batch.date)}" onchange="S.batch.date=this.value">
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>商品スキャン済み (${n}個)</span>
+        <button onclick="addProductFrom('sagawa')" style="font-size:13px;padding:4px 12px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">＋ 追加</button>
+      </div>
+      <div class="card">
+        ${n > 0 ? S.batch.products.map((p,i)=>`
+          <div class="p-item">
+            <div class="p-num">${i+1}</div>
+            <div class="p-id">${esc(p.orderId)}</div>
+            <button class="p-del" onclick="delProduct(${i})">✕</button>
+          </div>`).join('') : '<div style="padding:12px;color:#aaa;font-size:13px;text-align:center">まだスキャンされていません</div>'}
+      </div>
+    </div>
+    <button id="sagawaNextBtn" class="btn ${canNext?'btn-primary':'btn-disabled'}" onclick="${canNext?"go('summary')":''}">
+      次へ → サマリー確認
+    </button>
+  </div>`;
+}
+
+function screenSummary() {
+  const n = S.batch.products.length;
+  const total = parseFloat(S.batch.amount)||0;
+  const perItem = n > 0 ? Math.round(total/n) : 0;
+  return `
+  <div class="nav">
+    <button class="nav-btn" onclick="go('sagawa')">‹ 戻る</button>
+    <div class="nav-title">③ 確認・保存</div>
+    <div style="min-width:60px"></div>
+  </div>
+  <div class="screen">
+    <div class="progress"><div class="progress-dot done"></div><div class="progress-dot done"></div><div class="progress-dot active"></div></div>
+    <div class="amount-hl">
+      <div class="lbl">1個あたりの金額</div>
+      <div class="val">¥${perItem.toLocaleString()}</div>
+      <div class="sub">${total.toLocaleString()}円 ÷ ${n}個</div>
+    </div>
+    <div class="section">
+      <div class="section-header">配送情報</div>
+      <div class="card">
+        <div class="card-row"><div class="card-row-label">発送日</div><div class="card-row-value">${esc(S.batch.date)}</div></div>
+        <div class="card-row"><div class="card-row-label">佐川追跡番号</div><div class="card-row-value" style="font-size:13px">${esc(S.batch.tracking)}</div></div>
+        <div class="card-row"><div class="card-row-label">合計金額</div><div class="card-row-value">¥${total.toLocaleString()}</div></div>
+        <div class="card-row"><div class="card-row-label">商品数</div><div class="card-row-value">${n}個</div></div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Order ID 一覧 (${n}件)</span>
+        <button onclick="addProductFrom('summary')" style="font-size:13px;padding:4px 12px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">＋ 追加</button>
+      </div>
+      <div class="card">
+        ${S.batch.products.map((p,i)=>`
+          <div class="p-item">
+            <div class="p-num">${i+1}</div>
+            <div class="p-id">${esc(p.orderId)}</div>
+            <button class="p-del" onclick="delProduct(${i})">✕</button>
+          </div>`).join('')}
+      </div>
+    </div>
+    ${S.settings.gasUrl
+      ? `<button class="btn btn-success" onclick="submitAll()">📊 Drive保存 ＋ スプシに記録</button>`
+      : `<div class="status-badge status-warn" style="margin-bottom:10px">⚠️ 設定でURLを入力してください</div>`}
+    <button class="btn btn-secondary" onclick="copyCSV()">📋 CSV をコピー（バックアップ）</button>
+  </div>`;
+}
+
+function screenSuccess() {
+  const n = S.batch.products.length;
+  return `
+  <div class="nav">
+    <div style="min-width:60px"></div>
+    <div class="nav-title">完了</div>
+    <div style="min-width:60px"></div>
+  </div>
+  <div class="screen" style="text-align:center;padding-top:60px">
+    <div class="success-circle">✓</div>
+    <div style="font-size:28px;font-weight:700;margin-bottom:8px">保存完了！</div>
+    <div style="font-size:15px;color:var(--g2);margin-bottom:40px;line-height:1.6">
+      ${n}件を Drive ＋ スプレッドシートに記録しました
+    </div>
+    <button class="btn btn-primary" onclick="startBatch()">📦 新しいバッチを開始</button>
+    <button class="btn btn-secondary" onclick="go('home')">ホームへ戻る</button>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
+//  BATCH ACTIONS
+// ══════════════════════════════════════════════
+function startBatch() {
+  S.batch = { date:todayStr(), tracking:'', amount:'', amountDetected:false,
+    products:[], sagawaPreview:null, sagawaFile:null, sagawaImgUrl:null };
+  S.scanDetected = false;
+  go('products');
+}
+function delProduct(i) {
+  const p = S.batch.products[i];
+  // Drive上の画像も削除
+  if (p.imgUrl && S.settings.gasUrl) {
+    const m = p.imgUrl.match(/\/d\/([^/]+)\//);
+    if (m) callGAS({ action:'deleteFile', fileId: m[1] }).catch(()=>{});
+    toast('Drive画像を削除しました');
+  }
+  S.batch.products.splice(i, 1);
+  go(S.screen);
+}
+function addProductFrom(returnScreen) { S.returnScreen = returnScreen; triggerCam('product'); }
+
+// ══════════════════════════════════════════════
+//  CAMERA
+// ══════════════════════════════════════════════
+function triggerCam(mode) {
+  S.camMode = mode;
+  const inp = document.getElementById('cameraInput');
+  inp.value = ''; inp.click();
+}
+
+document.getElementById('cameraInput').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  S.pendingFile = file;
+
+  if (S.camMode === 'sagawa') {
+    S.batch.sagawaPreview = URL.createObjectURL(file);
+    S.batch.sagawaFile = file;
+    go('sagawa');
+    await processSagawa(file);
+  } else {
+    await processProduct(file, URL.createObjectURL(file));
+  }
+});
+
+// ─── Sagawa ───────────────────────────────────
+async function processSagawa(file) {
+  // 1) ローカルでバーコードスキャン
+  showLoading('バーコードを読み取り中...');
+  let localTracking = '';
+  try {
+    const scanner = new Html5Qrcode('qr-dummy');
+    const raw = await scanner.scanFile(file, false);
+    // XXXX-XXXX-XXXX 形式または12桁
+    const m = raw.match(/\b(\d{4}[-\s]?\d{4}[-\s]?\d{4})\b/);
+    if (m) localTracking = m[1].replace(/[\-\s]/g,'');
+  } catch(_) {}
+  hideLoading();
+
+  if (S.settings.gasUrl) {
+    const b64raw = await fileToB64(file, 1200, 0.7);
+    const b64 = b64raw.replace(/^data:image\/[^;]+;base64,/, '');
+
+    // 2) 画像をDriveにアップロード → OCR（追跡番号・サイズ）も取得
+    try {
+      showLoading('画像をアップロード・読み取り中...');
+      const upRes = await callGAS({ action:'uploadImage', type:'sagawa', image: b64, imageB64: b64, date: todayStr() });
+      hideLoading();
+      if (upRes && upRes.fileUrl) S.batch.sagawaImgUrl = upRes.fileUrl;
+      let sagawaOcrText = '';
+      if (upRes && upRes.ocrText) sagawaOcrText = upRes.ocrText;
+      if (upRes && upRes.tracking && !localTracking) localTracking = upRes.tracking;
+      // サイズから送料を自動計算
+      const SAGAWA_RATES = { 60:550, 80:600, 100:690, 140:870, 160:1170 };
+      const sm = sagawaOcrText.match(/\b(60|80|100|140|160)\b/);
+      if (sm) {
+        const size = parseInt(sm[1]);
+        const rate = SAGAWA_RATES[size];
+        if (rate) {
+          S.batch.amount = String(rate);
+          S.batch.detectedSize = size;
+          S.batch.amountDetected = true;
+        }
+      }
+    } catch(_) { hideLoading(); }
+  }
+
+  if (localTracking) { S.batch.tracking = localTracking; S.scanDetected = true; }
+  go('sagawa');
+  if (S.batch.tracking) toast('追跡番号を検出しました ✓');
+  if (S.batch.amount) toast('金額を検出しました ✓');
+  if (!S.batch.tracking) toast('手動で追跡番号を入力してください');
+}
+
+// ─── Product ──────────────────────────────────
+async function processProduct(file, previewUrl) {
+  showLoading('QR コードを読み取り中...');
+  let detectedId = '';
+
+  try {
+    const scanner = new Html5Qrcode('qr-dummy');
+    const raw = await scanner.scanFile(file, false);
+    hideLoading();
+    const qr = raw.trim();
+    // 国コード＋数字パターン（MY/SG/PH/TW/VN/TH + 10〜15桁）
+    let qm = qr.match(/\b((?:MY|SG|PH|TW|VN|TH)\d{10,15})\b/);
+    if (qm) { detectedId = qm[1]; }
+    // "Order ID:" の後
+    if (!detectedId) { qm = qr.match(/[Oo]rder[\s_]*[Ii][Dd][^A-Z0-9]*([A-Z0-9]{8,20})/); if (qm) detectedId = qm[1]; }
+    // 英数字12〜20文字（SPXXXは除外）
+    if (!detectedId && !/^SPX[A-Z]{2}\d+/i.test(qr)) {
+      qm = qr.match(/\b([A-Z0-9]{12,20})\b/); if (qm) detectedId = qm[1];
+      if (!detectedId && qr.length < 30) detectedId = qr;
+    }
+  } catch(_) { hideLoading(); }
+
+  // 2) GASにアップロード → OCRでOrder ID取得
+  let imgUrl = '';
+  let ocrDebugText = '';
+  if (!S.settings.gasUrl) {
+    ocrDebugText = 'エラー: GAS URL未設定';
+  } else {
+    showLoading('画像をアップロード・読み取り中...');
+    try {
+      const b64raw = await fileToB64(file, 1200, 0.7);
+      const b64 = b64raw.replace(/^data:image\/[^;]+;base64,/, '');
+      const res = await callGAS({ action:'uploadImage', type:'product', image:b64, imageB64:b64 });
+      hideLoading();
+      if (res && res.fileUrl) imgUrl = res.fileUrl;
+      if (res && res.orderId && !detectedId) {
+        detectedId = res.orderId;
+        if (detectedId) toast('Order IDを自動検出しました ✓');
+      }
+      if (res && res.ocrError) ocrDebugText = 'OCRエラー: ' + res.ocrError;
+      else if (res && res.status === 'error') ocrDebugText = 'GASエラー: ' + (res.msg||'不明');
+      else if (!res) ocrDebugText = 'レスポンスなし';
+      else if (res && res.ocrText) ocrDebugText = res.ocrText.slice(0, 300);
+      else ocrDebugText = 'GAS応答: ' + JSON.stringify(res).slice(0, 150);
+    } catch(e) {
+      hideLoading();
+      ocrDebugText = 'エラー: ' + e.message;
+    }
+  }
+
+  showProductModal(detectedId, previewUrl, file, imgUrl, ocrDebugText);
+}
+
+function showProductModal(id, previewUrl, file, imgUrl, debugText) {
+  const el = document.createElement('div');
+  el.className = 'modal-overlay'; el.id = 'productModal';
+  el.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-title">Order ID を確認</div>
+      ${previewUrl ? `<img class="modal-img" src="${previewUrl}" alt="商品ラベル">` : ''}
+      <input class="modal-input ${id?'detected':''}" id="modalOrderId"
+        type="text" value="${esc(id)}" placeholder="例: 260404U82XR79D"
+        autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+      <div class="modal-hint">${id ? '✓ 自動検出 — 内容を確認して追加してください' : 'Order IDを入力してください'}</div>
+      <div style="margin-top:8px;padding:8px;background:#f5f5f5;border-radius:6px;font-size:11px;color:#666;word-break:break-all;max-height:80px;overflow-y:auto">🔍 ${debugText ? esc(debugText) : '（OCR結果なし）'}</div>
+      <button class="modal-btn-add" onclick="confirmProduct()">追加する</button>
+      <button class="modal-btn-cancel" onclick="document.getElementById('productModal').remove()">キャンセル</button>
+    </div>`;
+  el._file = file;
+  el._preview = previewUrl;
+  el._imgUrl = imgUrl || null;
+  document.body.appendChild(el);
+  setTimeout(()=>{ const inp=document.getElementById('modalOrderId'); inp?.focus(); inp?.setSelectionRange(0,inp.value.length); }, 150);
+}
+
+function confirmProduct() {
+  const val = (document.getElementById('modalOrderId')?.value||'').trim();
+  if (!val) { toast('Order IDを入力してください'); return; }
+  const modal = document.getElementById('productModal');
+  S.batch.products.push({ orderId: val, imgFile: modal?._file||null, imgPreview: modal?._preview||null, imgUrl: modal?._imgUrl||null });
+  modal?.remove();
+  go(S.returnScreen || 'products');
+  S.returnScreen = null;
+  toast(`追加: ${val.length>16?val.substring(0,16)+'…':val}`);
+}
+
+// ══════════════════════════════════════════════
+//  SUBMIT — 画像アップロード → スプシ保存
+// ══════════════════════════════════════════════
+async function submitAll() {
+  if (!S.settings.gasUrl) { toast('Apps Script URL が未設定です'); return; }
+
+  const n = S.batch.products.length;
+  showLoadingWithBar('画像をアップロード中... 0/' + n, 0);
+
+  // 1) 商品画像を順番にアップロード
+  for (let i = 0; i < n; i++) {
+    const p = S.batch.products[i];
+    if (p.imgFile && !p.imgUrl) {
+      try {
+        const b64 = await fileToB64(p.imgFile, 1000, 0.65);
+        const res = await callGAS({ action:'uploadImage', type:'product', image:b64 });
+        if (res.fileUrl) p.imgUrl = res.fileUrl;
+        // OCRでOrder IDが取れてたら上書き（より精度が高い可能性）
+        if (res.orderId && res.orderId.length > 5 && !p.orderId) p.orderId = res.orderId;
+      } catch(_) {}
+    }
+    setLoadingBar(`画像をアップロード中... ${i+1}/${n}`, (i+1)/n * 80);
+  }
+
+  // 2) 佐川伝票画像（まだUpload済みでなければ）
+  if (S.batch.sagawaFile && !S.batch.sagawaImgUrl) {
+    setLoadingBar('佐川伝票を保存中...', 85);
+    try {
+      const b64 = await fileToB64(S.batch.sagawaFile, 1200, 0.7);
+      const res = await callGAS({ action:'uploadImage', type:'sagawa', image:b64, imageB64:b64, date: todayStr() });
+      if (res.fileUrl) S.batch.sagawaImgUrl = res.fileUrl;
+    } catch(_) {}
+  }
+
+  // 3) スプシに一括書き込み
+  setLoadingBar('スプレッドシートに保存中...', 90);
+  try {
+    const rows = S.batch.products.map(p => ({
+      orderId: p.orderId, imageUrl: p.imgUrl || ''
+    }));
+    await callGAS({
+      action: 'saveBatch',
+      date: S.batch.date,
+      tracking: S.batch.tracking,
+      amount: S.batch.amount,
+      sagawaImgUrl: S.batch.sagawaImgUrl || '',
+      products: rows
+    });
+    hideLoading();
+    go('success');
+  } catch(err) {
+    hideLoading();
+    toast('エラー: ' + err.message);
+  }
+}
+
+// ══════════════════════════════════════════════
+//  GAS 通信
+// ══════════════════════════════════════════════
+async function callGAS(payload) {
+  const res = await fetch(S.settings.gasUrl, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  // no-cors: レスポンス本文は読めないが成功とみなす
+  return { status: 'ok' };
+}
+
+// ══════════════════════════════════════════════
+//  CSV コピー（バックアップ用）
+// ══════════════════════════════════════════════
+function copyGasCode() {
+  const pre = document.querySelector('pre');
+  if (!pre) { toast('コードが見つかりません'); return; }
+  const text = pre.textContent;
+  navigator.clipboard?.writeText(text)
+    .then(() => toast('GASコードをコピーしました ✓'))
+    .catch(() => {
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      toast('GASコードをコピーしました ✓');
+    });
+}
+
+function copyCSV() {
+  const n = S.batch.products.length;
+  const total = parseFloat(S.batch.amount)||0;
+  const perItem = n > 0 ? Math.round(total/n) : 0;
+  const lines = ['発送日,佐川追跡番号,Order ID,1個あたり金額'];
+  S.batch.products.forEach(p => lines.push(`${S.batch.date},${S.batch.tracking},${p.orderId},${perItem}`));
+  const csv = lines.join('\n');
+  const copy = t => navigator.clipboard?.writeText(t) || (()=>{ const el=document.createElement('textarea');el.value=t;document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);return Promise.resolve(); })();
+  copy(csv).then(()=>toast('CSV をコピーしました ✓')).catch(()=>toast('コピーできませんでした'));
+}
+
+// ══════════════════════════════════════════════
+//  IMAGE HELPERS
+// ══════════════════════════════════════════════
+function fileToB64(file, maxPx, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const ratio = Math.min(maxPx/img.width, maxPx/img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// ══════════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════════
+function showLoading(txt) {
+  document.getElementById('loading-text').textContent = txt||'処理中...';
+  document.getElementById('loading-bar-wrap').style.display = 'none';
+  document.getElementById('loading').classList.add('show');
+}
+function showLoadingWithBar(txt, pct) {
+  document.getElementById('loading-text').textContent = txt;
+  document.getElementById('loading-bar-wrap').style.display = 'block';
+  document.getElementById('loading-bar').style.width = pct+'%';
+  document.getElementById('loading').classList.add('show');
+}
+function setLoadingBar(txt, pct) {
+  document.getElementById('loading-text').textContent = txt;
+  document.getElementById('loading-bar').style.width = pct+'%';
+}
+function hideLoading() { document.getElementById('loading').classList.remove('show'); }
+function toast(msg, dur=2600) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('show'), dur);
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════
+loadSettings();
+go('home');
+</script>
+</body>
+</html>
