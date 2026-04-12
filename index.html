@@ -527,7 +527,7 @@ function screenSagawa() {
     <div class="section">
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
         <span>商品スキャン済み (${n}個)</span>
-        <button onclick="addProductFrom('sagawa')" style="font-size:13px;padding:4px 12px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">＋ 追加</button>
+        <button onclick="addProductFrom('sagawa')" style="font-size:14px;font-weight:600;padding:7px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;cursor:pointer">＋ 追加</button>
       </div>
       <div class="card">
         ${n > 0 ? S.batch.products.map((p,i)=>`
@@ -573,7 +573,7 @@ function screenSummary() {
     <div class="section">
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
         <span>Order ID 一覧 (${n}件)</span>
-        <button onclick="addProductFrom('summary')" style="font-size:13px;padding:4px 12px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">＋ 追加</button>
+        <button onclick="addProductFrom('summary')" style="font-size:14px;font-weight:600;padding:7px 16px;border-radius:10px;border:none;background:var(--blue);color:#fff;cursor:pointer">＋ 追加</button>
       </div>
       <div class="card">
         ${S.batch.products.map((p,i)=>`
