@@ -135,7 +135,7 @@ function todayStr() {
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxpmI7ZM58P6cTCrerOveG2UM5llYazRgfYb-zTIiMmyXv8CWzUZknLQKbYSS37gX1nAg/exec';
+var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzTRDl8v8t9FcSZsXmmF5ehzKslqwIxa41oVECR5LxDHGnJVERNnFLJR2fFSMAbxb-UJQ/exec';
 
 function loadSettings() {
   S.settings.gasUrl = localStorage.getItem('gasUrl') || DEFAULT_GAS_URL;
@@ -853,12 +853,10 @@ async function submitAll() {
 async function callGAS(payload) {
   const res = await fetch(S.settings.gasUrl, {
     method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(payload)
   });
-  // no-cors: レスポンス本文は読めないが成功とみなす
-  return { status: 'ok' };
+  return res.json();
 }
 
 // ══════════════════════════════════════════════
