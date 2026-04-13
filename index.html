@@ -8,7 +8,7 @@
   <title>伝票スキャナー</title>
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <style
+  <style>
     :root {
       --blue:#007AFF; --green:#34C759; --red:#FF3B30; --orange:#FF9500;
       --g1:#1C1C1E; --g2:#636366; --g3:#AEAEB2; --g4:#C7C7CC;
@@ -271,7 +271,7 @@ function saveBatch(data) {
       var sheet = ss.getSheetByName(SHEETS[si]);
       if (!sheet) continue;
 
-      var imgCol = findOrCreateColumn(sheet, HEADER_ROW, '画像');
+      var imgCol = 10;
       var lastRow = sheet.getLastRow();
       if (lastRow < HEADER_ROW + 1) continue;
 
@@ -370,7 +370,7 @@ function formatTracking(raw) {
 }
 
 // ─── ヘッダー列を探すか追加する ──────────────
-function findOrCreateColumn(sheet, headerRow, name) {
+function 10 {
   var last = sheet.getLastColumn();
   if (last > 0) {
     var headers = sheet.getRange(headerRow, 1, 1, last).getValues()[0];
