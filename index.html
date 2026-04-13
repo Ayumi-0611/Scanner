@@ -136,7 +136,7 @@ function todayStr() {
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzTRDl8v8t9FcSZsXmmF5ehzKslqwIxa41oVECR5LxDHGnJVERNnFLJR2fFSMAbxb-UJQ/exec';
+var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwubCwzaYNZwjQFvD2Uf4o1vfCQRem41KkZY_PpXETjjgDLSKTsCiMg6W7Zks5jNrfdkA/exec';
 
 function loadSettings() {
   S.settings.gasUrl = localStorage.getItem('gasUrl') || DEFAULT_GAS_URL;
