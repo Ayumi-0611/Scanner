@@ -29,6 +29,7 @@ function doPost(e) {
   }
 }
 
+// ─── 画像をDriveに保存 → OCRで文字抽出 ──────
 function uploadImage(data) {
   var folder = getOrCreateFolder(FOLDER_NAME);
   var filename;
@@ -43,6 +44,7 @@ function uploadImage(data) {
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   var fileUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view';
+
   var result = { status:'ok', fileUrl:fileUrl };
   try {
     var lang = (data.type === 'product') ? 'en' : 'ja';
@@ -53,25 +55,33 @@ function uploadImage(data) {
       result.amount   = extractAmount(ocrText);
     } else {
       result.orderId = extractOrderId(ocrText);
-      if (result.orderId) { file.setName(result.orderId + '.jpg'); }
+      if (result.orderId) {
+        file.setName(result.orderId + '.jpg');
+      }
     }
-  } catch(e) { result.ocrError = e.toString(); }
+  } catch(e) {
+    result.ocrError = e.toString();
+  }
   return result;
 }
 
+// ─── Order IDで行を検索して書き込み ──────────
 function saveBatch(data) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var n = data.products.length;
   var perItem = n > 0 ? Math.round(parseFloat(data.amount) / n) : 0;
   var tracking = formatTracking(data.tracking);
   var results = [];
+
   data.products.forEach(function(p) {
     var found = false;
     for (var si = 0; si < SHEETS.length; si++) {
       var sheet = ss.getSheetByName(SHEETS[si]);
       if (!sheet) continue;
+
       var lastRow = sheet.getLastRow();
       if (lastRow < HEADER_ROW + 1) continue;
+
       var colAB = sheet.getRange(1, ORDER_COL, lastRow, 2).getValues();
       var matchedRows = [];
       for (var ri = 0; ri < colAB.length; ri++) {
@@ -79,18 +89,23 @@ function saveBatch(data) {
           matchedRows.push({ rowNum: ri + 1, hawb: String(colAB[ri][1]).trim() });
         }
       }
+
       if (matchedRows.length === 0) continue;
+
       var targetRow = matchedRows[0];
       if (matchedRows.length > 1) {
         var withHawb = matchedRows.filter(function(r) { return r.hawb !== ''; });
         if (withHawb.length > 0) targetRow = withHawb[0];
       }
+
       var rowNum = targetRow.rowNum;
       sheet.getRange(rowNum, TRACK_COL).setValue(tracking);
       sheet.getRange(rowNum, RATE_COL).setValue(perItem);
       sheet.getRange(rowNum, DATE_COL).setValue(data.date);
       if (p.imageUrl) {
-        sheet.getRange(rowNum, IMG_COL).setFormula('=HYPERLINK("' + p.imageUrl + '","📷 画像")');
+        sheet.getRange(rowNum, IMG_COL).setFormula(
+          '=HYPERLINK("' + p.imageUrl + '","📷 画像")'
+        );
       }
       found = true;
       results.push({ orderId:p.orderId, sheet:SHEETS[si], row:rowNum, hawb:targetRow.hawb, status:'updated' });
@@ -98,17 +113,45 @@ function saveBatch(data) {
     }
     if (!found) results.push({ orderId:p.orderId, status:'not_found' });
   });
+
   return { status:'ok', count:n, perItem:perItem, results:results };
 }
 
+// ─── OCR ────────────────────────────────────
 function runOcr(file, lang) {
-  var resource = { title:'ocr_tmp_'+Date.now(), mimeType:'application/vnd.google-apps.document' };
+  var folder = getOrCreateFolder(FOLDER_NAME);
+  var resource = {
+    title: 'ocr_tmp_' + Date.now(),
+    mimeType: 'application/vnd.google-apps.document',
+    parents: [{ id: folder.getId() }]  // マイドライブに散らばらないよう指定フォルダ内に作成
+  };
   var copy = Drive.Files.copy(resource, file.getId(), { ocr:true, ocrLanguage:lang });
-  var text = DocumentApp.openById(copy.id).getBody().getText();
-  Drive.Files.remove(copy.id);
-  return text;
+  try {
+    var text = DocumentApp.openById(copy.id).getBody().getText();
+    return text;
+  } finally {
+    try { Drive.Files.remove(copy.id); } catch(e) {}  // エラー時も必ず削除
+  }
 }
 
+// ─── マイドライブに残った一時ファイルを一括削除 ──
+function cleanupStrayFiles() {
+  var result = Drive.Files.list({
+    q: 'name contains "ocr_tmp_" and trashed = false',
+    pageSize: 100,
+    fields: 'files(id,name)'
+  });
+  var count = 0;
+  if (result.files && result.files.length > 0) {
+    result.files.forEach(function(f) {
+      try { Drive.Files.remove(f.id); count++; } catch(e) {}
+    });
+  }
+  Logger.log('削除した一時ファイル数: ' + count);
+  return { deleted: count };
+}
+
+// ─── テキスト抽出 ────────────────────────────
 function extractOrderId(text) {
   var m = text.match(/[Oo]rder\s*[Ii][Dd][^A-Z0-9]*([A-Z0-9]{8,20})/);
   if (m) return m[1];
@@ -136,9 +179,25 @@ function extractAmount(text) {
 
 function formatTracking(raw) {
   var d = String(raw||'').replace(/\D/g,'');
-  return d.length === 12 ? d.slice(0,4)+'-'+d.slice(4,8)+'-'+d.slice(8,12) : (raw||'');
+  return d.length === 12
+    ? d.slice(0,4)+'-'+d.slice(4,8)+'-'+d.slice(8,12)
+    : (raw||'');
 }
 
+// ─── ヘッダー列を探すか追加する ──────────────
+function findOrCreateColumn(sheet, headerRow, name) {
+  var last = sheet.getLastColumn();
+  if (last > 0) {
+    var headers = sheet.getRange(headerRow, 1, 1, last).getValues()[0];
+    var idx = headers.indexOf(name);
+    if (idx >= 0) return idx + 1;
+  }
+  var newCol = last + 1;
+  sheet.getRange(headerRow, newCol).setValue(name).setFontWeight('bold');
+  return newCol;
+}
+
+// ─── Drive ファイル削除 ───────────────────────
 function deleteFile(data) {
   try {
     if (data.fileId) DriveApp.getFileById(data.fileId).setTrashed(true);
@@ -146,6 +205,7 @@ function deleteFile(data) {
   } catch(e) { return { status:'error', msg:e.toString() }; }
 }
 
+// ─── Drive フォルダ ──────────────────────────
 function getOrCreateFolder(name) {
   var f = DriveApp.getFoldersByName(name);
   return f.hasNext() ? f.next() : DriveApp.createFolder(name);
